@@ -1,0 +1,347 @@
+from collections import deque
+import random
+import heapq
+import pygame 
+import sys
+
+class Nodo:
+    def __init__(self, estado, padre, movimiento, profundidad, piezas_correctas, costo_g=0, juego=1):
+        self.estado = estado #tupla de los estados 
+        self.padre = padre #padre del nodo actual
+        self.movimiento = movimiento #moviminetos hechos 
+        self.profundidad = profundidad #cantidad de pasos del nodo inicial al actual 
+        self.piezas_correctas = piezas_correctas#piezas que ya estan en el lugar correcto
+        self.costo_g = costo_g # Costo total desde el nodo inicial hasta el nodo actual
+        self.costo_f = self.costo_g + self.piezas_correctas# f = g + h
+        #combinación del costo total y el numero de piezas correctas
+        self.juego = juego #que tipo de juego se va a jugar 
+    
+    def __lt__(self, other): #comparar dos objetos 
+        return self.costo_f < other.costo_f
+        #verifica que el valor de costo_f del nodo actual sea menor que el costo_f de otro nodo 
+    
+    #Metodo para mover las piezas del tablero para 8-puzzle 
+    def mover(self, direccion):
+        if self.juego == 1:  # 8-puzzle
+            estado = list(self.estado)#hace una lista de las tuplas para poder modificarlas
+            ind = estado.index(0)#nos da el inidice de el espacio vacio 
+            #si esta en la primera fila no puede moverse hacia arriba
+            if direccion == "arriba" and ind not in [0, 1, 2]:
+                #se mueve el inidce 3 posiciones hacia arriba (posicion 8-3= 5)
+                estado[ind - 3], estado[ind] = estado[ind], estado[ind - 3]
+                """
+                temp = estado[ind - 3]
+                estado[ind - 3] = estado[ind]
+                estado[ind] = temp
+                return tuple(estado)
+                """
+            #si esta en la ultima fila no se puede mover hacia abajo
+            elif direccion == "abajo" and ind not in [6, 7, 8]:
+                estado[ind + 3], estado[ind] = estado[ind], estado[ind + 3]
+            #si esta en la columna derecha  no se puede mover hacia la derecha
+            elif direccion == "derecha" and ind not in [2, 5, 8]:
+                estado[ind + 1], estado[ind] = estado[ind], estado[ind + 1]
+            #si esta en la columna izquierda no se puede mover hacia la izquierda 
+            elif direccion == "izquierda" and ind not in [0, 3, 6]:
+                estado[ind - 1], estado[ind] = estado[ind], estado[ind - 1]
+            else:
+                return None
+            return tuple(estado)
+        if self.juego ==2: 
+            return None
+        #return None
+
+    #metodo que encuentra y regresa todos los nodos sucesores del nodo actual 
+    def encontrar_sucesores(self):
+        sucesores = []#crea una lista de sucesores 
+        if self.juego == 1:  # 8-puzzle
+            #mueve la pieza a alguna de las 4 direcciones posibles 
+            for direccion in ["arriba", "abajo", "derecha", "izquierda"]:
+                nuevo_estado = self.mover(direccion)
+                if nuevo_estado:
+                    #crea nuevos nodos para cada movimiento que sea valido 
+                    #incrementando la profundidad (pasos hechos)
+                    #se calcula la heuristica 
+                    #y se agrega a la lista de los sucesores 
+                    sucesores.append(Nodo(nuevo_estado, self, direccion, self.profundidad + 1, calcular_heuristica(nuevo_estado, self.juego), self.costo_g + 1, self.juego))
+        if self.juego == 2:  # 8-queens
+            fila_nueva = len(self.estado)
+            #determina la nueva fila en la que se intentara colocar a la reina, basandose en la 
+            #longuitud del nodo actual (num reina colocadas)
+            if fila_nueva < 8:#asegurarse que no se coloquen mas que 8 reinas
+                for col in range(8):#itera sobre cada columna para colocar a una reina 
+                    if all(col != self.estado[i] and abs(col - self.estado[i]) != fila_nueva - i for i in range(fila_nueva)):
+                        #checa que colocar una reina en la columna actual no resulta en ataques de reinas diagonales 
+                        nuevo_estado = self.estado + (col,)
+                        #nuevo estado añadiendo la columna de la nueva reina 
+                        sucesores.append(Nodo(nuevo_estado, self, (fila_nueva, col), self.profundidad + 1, calcular_heuristica(nuevo_estado, self.juego), self.costo_g + 1, self.juego))
+                        #se agrega el nodo a la lista de sucesores 
+        return sucesores
+    
+    #Metodo que regresa el camino encontrado 
+    def encontrar_camino(self):
+        camino = []#lista para guardar los nodos del camino 
+        nodo_actual = self#empieza en el nodo actual 
+        while nodo_actual:#mientras el nodo actual no sea None 
+            camino.append(nodo_actual)#se agrega a la lista 
+            nodo_actual = nodo_actual.padre#y el nodo actual se cambia al padre de ese nodo
+        camino.reverse()#reacomodas el camino 
+        return camino
+    
+    #metodo para imprimir los tableros 
+    def imprimir_nodo(self):
+        if self.juego == 1:#8-puzzle 
+            for i in range(0, len(self.estado), 3):
+                #itera ene bloques de 3 elementos para el tablero de 3x3
+                print(' '.join(str(x) if x != 0 else ' ' for x in self.estado[i:i+3]))
+                # Convierte cada elemento de la fila en una cadena para imprimirlo. Si el elemento es 0 (que representa el espacio vacío )
+                #se obtienen los indices de i hasta i+3 que son los elementos de la fila, y pone los nodos de esa fila 
+                
+        elif self.juego == 2:
+            board = ["."] * 8#crea una lista board donde los puntos son casillas vacias 
+            for i, col in enumerate(self.estado):
+                #itera sobre cada fila (i) y sobre cada fila de los estados que es una tupla donde cada elemento representa una colmna de la reina en cada fila 
+                board[col] = "Q"#coloca la reina 
+                print(" ".join(board))#impime la casilla actual del tablero 
+                board[col] = "."#reinicia el board con . para la siguiente fila 
+        print()
+
+def calcular_heuristica(estado, juego):
+    if juego == 1:#8 puzzle 
+        correcto = (1, 2, 3, 4, 5, 6, 7, 8, 0)#la tupla en la posicion correcta 
+        return sum(1 for i, j in zip(estado, correcto) if i != j)
+    #suma 1 por cada posicion en el estado actual que no coincide con el objetivo 
+    #emparejando el elemento actual con el corrcto 
+    #y checa cuantas piezas no estan en la posicion correcta 
+        #regresa la suma 
+    elif juego == 2:#8 queens
+        h = 0#contador de las amenazas de las reinas 
+        for i in range(len(estado)):#ietera sobre cad areina del tablero donde i es el inidce de la reina 
+            for j in range(i + 1, len(estado)):#iter sobre la reina siguiente para verificar amenazas 
+                if estado[i] == estado[j] or abs(estado[i] - estado[j]) == j - i:
+                    #verifica si las reinas estan en la misma columna y tambien 
+                    #si las reinas estan en la misma diagonal 
+                    #si la diferencia de sus posiciones es la misma que la de susu indices 
+                    h += 1#incrementa cada vez que hay una amenaza
+        return h
+
+def a_star(inicial, meta, juego):
+    visitados = set()#conjunto para mantener los estados ya explorados 
+    frontera = []#lista que sera como la cola de prioridades donde se guardan los nodos a explorar 
+    inicial = tuple(inicial)  # Convertir estado inicial a tupla si es necesario
+    meta = tuple(meta)        # Convertir estado meta a tupla si es necesario
+    #crea un nodo con el estado inicial 
+    nodo_inicial = Nodo(inicial, None, None, 0, calcular_heuristica(inicial, juego), 0, juego)
+    #añade el nodo a la frontera usando heapq con su costo de estimacion f 
+    heapq.heappush(frontera, (nodo_inicial.costo_f, nodo_inicial))
+    #mientras haya nodos en la frontera 
+    while frontera:
+        _, nodo = heapq.heappop(frontera)#extrae ndoo con el menor costo de la frontera 
+        if nodo.estado == meta:#si el estado nodo es igual al estado meta regresa el camino 
+            return nodo.encontrar_camino()
+        if nodo.estado not in visitados:#si el nodo no ha sido visitado 
+            visitados.add(nodo.estado)#añade el nodo
+            for sucesor in nodo.encontrar_sucesores():#para cada sucesor de este nodo no visitado 
+                if sucesor.estado not in visitados or sucesor.costo_g < nodo.costo_g:
+                    #Si el estado del sucesor no ha sido visitado o tiene un costo g menor que el nodo actual
+                    heapq.heappush(frontera, (sucesor.costo_f, sucesor))
+                    #añade el sucedor a la frontera para revisarlo .
+    return None
+
+def meet_in_the_middle(inicial, meta, juego):
+    #diccionario que mapea los estados iniciales  de los nodos 
+    visitados_inicial = {inicial: Nodo(inicial, None, None, 0, calcular_heuristica(inicial, juego),0,juego)}
+    #diccionario que mapea los estados meta  de los nodos 
+    visitados_meta = {meta: Nodo(meta, None, None, 0, calcular_heuristica(meta, juego),0,juego)}
+    #colas dobles que contieien el estado inicial de sus nodos y que se usa para explorar 
+    frontera_inicial = deque([(inicial, Nodo(inicial, None, None, 0, calcular_heuristica(inicial, juego),0,juego))])
+    #colas dobles que contieien el estado meta  de sus nodos y que se usa para explorar 
+    frontera_meta = deque([(meta, Nodo(meta, None, None, 0, calcular_heuristica(meta, juego),0,juego))])
+    
+    while frontera_inicial and frontera_meta:#extrae el nodo actual de las dos fronteras 
+        estado_actual_inicial, nodo_actual_inicial = frontera_inicial.popleft()
+        #Extrae el primer nodo y su estado de la frontera inicial.
+        estado_actual_meta, nodo_actual_meta = frontera_meta.popleft()
+        #Extrae el ultimo nodo y su estado de la frontera meta.
+        if estado_actual_inicial in visitados_meta:
+        #Comprueba si el estado actual extraído de la frontera inicial ya ha sido visitado desde el lado meta
+            return nodo_actual_inicial.encontrar_camino(), visitados_meta[estado_actual_inicial].encontrar_camino()
+            #Si se encuentra, combina y devuelve los caminos desde ambos lados hasta el punto de encuentro
+        if estado_actual_meta in visitados_inicial:
+        #Comprueba si el estado actual extraído de la frontera meta ya ha sido visitado desde el lado inicial.
+            return visitados_inicial[estado_actual_meta].encontrar_camino(), nodo_actual_meta.encontrar_camino()
+            # Si se encuentra, combina y devuelve los caminos desde ambos lados hasta el punto de encuentro.
+        
+        for sucesor in nodo_actual_inicial.encontrar_sucesores():
+        #Itera sobre los sucesores del nodo actual desde el inicio
+            if sucesor.estado not in visitados_inicial:
+            #Comprueba si el estado del sucesor no ha sido visitado desde el inicio.
+                visitados_inicial[sucesor.estado] = sucesor
+                #añade el sucesor al diccionario de visitados de inicio 
+                frontera_inicial.append((sucesor.estado, sucesor))
+                #añade el sucesor a la frontera inicial para explorarlo.
+        
+        for sucesor in nodo_actual_meta.encontrar_sucesores():
+        #Itera sobre los sucesores del nodo actual desde la meta 
+            if sucesor.estado not in visitados_meta:
+            #Comprueba si el estado del sucesor no ha sido visitado desde la meta.
+                visitados_meta[sucesor.estado] = sucesor
+                #añade el nodo sucesor al diccionario de nodos desde la meta 
+                frontera_meta.append((sucesor.estado, sucesor))
+                #añade el sucesor a la frontera meta  para explorarlo.
+        
+    return None
+
+#----------------------------------------------
+
+# Configuraciones iniciales de Pygame
+pygame.init()
+window_size = (800, 600)
+screen = pygame.display.set_mode(window_size)
+pygame.display.set_caption("8-Puzzle y 8-Queens")
+font = pygame.font.Font(None, 36)
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+YELLOW = (243, 211, 0)
+
+
+def draw_text(text, font, color, surface, x, y):
+    textobj = font.render(text, True, color)
+    textrect = textobj.get_rect()
+    textrect.topleft = (x, y)
+    surface.blit(textobj, textrect)
+
+def choose_option(options, title, background_images):
+    current_choice = None
+    image_index = 0  # Controla qué imagen de fondo usar
+    
+    if (options == ["   .", "   .."]):
+        while current_choice is None:
+            screen.blit(background_images[image_index], (0, 0))  # Dibuja el fondo
+            draw_text(title, font, BLACK, screen, 20, 20)
+            for i, option in enumerate(options):
+                draw_text(f'{i + 1}. {option}', font, YELLOW, screen, 20, 60 + 40 * i)
+            pygame.display.flip()
+            
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    x, y = event.pos
+                    for i in range(len(options)):
+                        if 20 <= x <= 300 and 60 + 40 * i <= y <= 90 + 40 * i:
+                            current_choice = i
+                            break
+    elif (options == ["A*", "Meet in the Middle"]):
+        image_index = 1
+        while current_choice is None:
+            screen.blit(background_images[image_index], (0, 0))  # Dibuja el fondo
+            draw_text(title, font, BLACK , screen, 20, 20)
+            for i, option in enumerate(options):
+                draw_text(f'{i + 1}. {option}', font, BLACK, screen, 20, 60 + 40 * i)
+            pygame.display.flip()
+            
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    x, y = event.pos
+                    for i in range(len(options)):
+                        if 20 <= x <= 300 and 60 + 40 * i <= y <= 90 + 40 * i:
+                            current_choice = i
+                            break
+    return current_choice
+
+
+# Carga y escala las imágenes de fondo
+background_image1 = pygame.image.load('E:/Users/Liz/Pictures/background1.jpg').convert()
+background_image1 = pygame.transform.scale(background_image1, window_size)
+background_image2 = pygame.image.load('E:/Users/Liz/Pictures/background2.jpg').convert()
+background_image2 = pygame.transform.scale(background_image2, window_size)
+background_images = [background_image1, background_image2]
+# Selección del juego y algoritmo
+game_choice = choose_option(["   .", "   .."], "¿Qué juego desea jugar?", background_images)
+algorithm_choice = choose_option(["A*", "Meet in the Middle"], "Elija qué algoritmo desea usar para resolver el juego", background_images)
+
+
+# Function to generate a random initial state with 0 in a random position
+def generar_estado_inicial_random():
+    """Generates a random initial state with 0 in a random position"""
+    estado_random = list(range(1, 9)) + [0]
+    random.shuffle(estado_random)
+    return tuple(estado_random)
+
+# ... (other imports and the beginning of the class Nodo)
+
+# Definición de estados inicial y final
+estado_final = (1, 2, 3, 4, 5, 6, 7, 8, 0) if game_choice == 0 else (3,1,7,4,6,0,2,5)
+estado_inicial = generar_estado_inicial_random() if game_choice == 0 else ()
+nodo_inicial = Nodo(estado_inicial, None, None, 0, calcular_heuristica(estado_inicial, game_choice+1), 0, game_choice+1)
+
+# ... (rest of the code)
+
+# Función para imprimir el tablero en Pygame
+def draw_board(nodo):
+    screen.fill(WHITE)
+    if nodo.juego == 1:  # 8-Puzzle
+        tile_size = 60
+        top_left_x = (window_size[0] - (3 * tile_size)) // 2
+        top_left_y = (window_size[1] - (3 * tile_size)) // 2
+        state = list(nodo.estado)
+        for i, value in enumerate(state):
+            x = top_left_x + (i % 3) * tile_size
+            y = top_left_y + (i // 3) * tile_size
+            pygame.draw.rect(screen, BLACK, (x, y, tile_size, tile_size), 1)
+            if value != 0:
+                draw_text(str(value), font, BLACK, screen, x + 20, y + 20)
+    elif nodo.juego == 2:  # 8-Queens
+        tile_size = 75
+        top_left_x = (window_size[0] - (8 * tile_size)) // 2
+        top_left_y = (window_size[1] - (8 * tile_size)) // 2
+        # Dibuja un tablero de 8x8
+        for i in range(8):
+            for j in range(8):
+                rect_color = WHITE if (i + j) % 2 == 0 else (211, 211, 211)  # Light gray
+                pygame.draw.rect(screen, rect_color, (top_left_x + j * tile_size, top_left_y + i * tile_size, tile_size, tile_size))
+        
+        # Colocación de reinas en el tablero según el estado
+        state = list(nodo.estado)
+        for i, col in enumerate(state):
+            if col is not None:
+                queen_x = top_left_x + col * tile_size
+                queen_y = top_left_y + i * tile_size
+                draw_text('Q', font, BLACK, screen, queen_x + 20, queen_y + 20)
+
+    pygame.display.flip()
+
+
+
+# Mostrar estado inicial
+draw_board(nodo_inicial)
+
+# Lógica para correr el algoritmo y visualizar resultados
+running = True
+while running:
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            pygame.quit()
+            sys.exit()
+
+    # Decisiones basadas en el algoritmo elegido
+    if algorithm_choice == 0:  # A*
+        resultado = a_star(estado_inicial, estado_final, game_choice+1)
+        for nodo in resultado:
+            draw_board(nodo)
+            pygame.time.wait(500)  # Espera medio segundo entre cada estado
+    elif algorithm_choice == 1:  # Meet in the Middle
+        resultado = meet_in_the_middle(estado_inicial, estado_final, game_choice+1)
+        if resultado:
+            camino_inicio, camino_meta = resultado
+            for nodo in camino_inicio + camino_meta[::-1]:  # Visualiza el camino completo
+                draw_board(nodo)
+                pygame.time.wait(500)  # Espera medio segundo entre cada estado
+    running = False
+
+pygame.quit()
