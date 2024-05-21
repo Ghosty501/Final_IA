@@ -124,6 +124,51 @@ def calcular_heuristica(estado, juego):
                     #si la diferencia de sus posiciones es la misma que la de susu indices 
                     h += 1#incrementa cada vez que hay una amenaza
         return h
+    
+def calcular_heuristica_8queens(estado):
+    # Contar pares de reinas que se atacan
+    ataques = 0
+    for i in range(8):
+        for j in range(i + 1, 8):
+            if abs(estado[i] - estado[j]) == abs(i - j) or estado[i] == estado[j]:
+                ataques += 1
+
+    return ataques
+
+def encontrar_sucesores8quuens(self):
+    """
+    Función que genera todos los estados sucesores posibles desde este nodo.
+
+    Returns:
+        list: Lista de nodos sucesores.
+    """
+    sucesores = []
+    for i in range(8):  # Iterar sobre las columnas
+        for fila in range(8):  # Iterar sobre las filas
+            if fila != self.estado[i]:  # Si la fila es diferente a la actual
+                nuevo_estado = list(self.estado)  # Copiar el estado actual
+                nuevo_estado[i] = fila  # Mover la reina a la nueva fila
+                if not es_estado_ataque8queens(nuevo_estado):  # Si no hay ataques en el nuevo estado
+                    sucesor = Nodo(nuevo_estado, self, f"Mover reina en la columna {i+1} a la fila {fila+1}", self.g + 1, calcular_heuristica(nuevo_estado), self.g + 1 + calcular_heuristica(nuevo_estado))
+                    sucesores.append(sucesor)  # Agregar el nuevo estado como sucesor
+
+    return sucesores
+
+def es_estado_ataque8queens(estado):
+    """
+    Función que verifica si un estado dado tiene ataques entre reinas.
+
+    Args:
+        estado (tuple): Estado actual (posición de las reinas).
+
+    Returns:
+        bool: True si hay ataques, False en caso contrario.
+    """
+    for i in range(8):
+        for j in range(i + 1, 8):
+            if abs(estado[i] - estado[j]) == abs(i - j) or estado[i] == estado[j]:
+                return True  # Hay ataque
+    return False  # No hay ataques
 
 def a_star(inicial, meta, juego):
     visitados = set()#conjunto para mantener los estados ya explorados 
@@ -191,6 +236,40 @@ def meet_in_the_middle(inicial, meta, juego):
                 #añade el sucesor a la frontera meta  para explorarlo.
         
     return None
+
+def meet_in_the_middle_8Queens(inicial, meta):
+    # Diccionarios para estados visitados
+    visitados_inicial = {inicial: Nodo(inicial, None, None, 0, calcular_heuristica(inicial), 0)}
+    visitados_meta = {meta: Nodo(meta, None, None, 0, calcular_heuristica(meta), 0)}
+
+    # Colas dobles para las fronteras
+    frontera_inicial = deque([(inicial, Nodo(inicial, None, None, 0, calcular_heuristica(inicial), 0))])
+    frontera_meta = deque([(meta, Nodo(meta, None, None, 0, calcular_heuristica(meta), 0))])
+
+    while frontera_inicial and frontera_meta:
+        # Extraer nodos actuales
+        estado_actual_inicial, nodo_actual_inicial = frontera_inicial.popleft()
+        estado_actual_meta, nodo_actual_meta = frontera_meta.popleft()
+
+        # Comprobar si se encuentran en el medio
+        if estado_actual_inicial in visitados_meta:
+            return nodo_actual_inicial.encontrar_camino(), visitados_meta[estado_actual_inicial].encontrar_camino()
+        if estado_actual_meta in visitados_inicial:
+            return visitados_inicial[estado_actual_meta].encontrar_camino(), nodo_actual_meta.encontrar_camino()
+
+        # Explorar sucesores
+        for sucesor in nodo_actual_inicial.encontrar_sucesores():
+            if sucesor.estado not in visitados_inicial:
+                visitados_inicial[sucesor.estado] = sucesor
+                frontera_inicial.append((sucesor.estado, sucesor))
+
+        for sucesor in nodo_actual_meta.encontrar_sucesores():
+            if sucesor.estado not in visitados_meta:
+                visitados_meta[sucesor.estado] = sucesor
+                frontera_meta.append((sucesor.estado, sucesor))
+
+    return None
+
 
 #----------------------------------------------
 
@@ -332,16 +411,23 @@ while running:
     # Decisiones basadas en el algoritmo elegido
     if algorithm_choice == 0:  # A*
         resultado = a_star(estado_inicial, estado_final, game_choice+1)
-        for nodo in resultado:
-            draw_board(nodo)
-            pygame.time.wait(500)  # Espera medio segundo entre cada estado
+        if resultado is not None:
+            for nodo in resultado:
+                draw_board(nodo)
+                pygame.time.wait(500)  # Espera medio segundo entre cada estado
+        else:
+            print("Error: a_star function returned None")
+            running = False
     elif algorithm_choice == 1:  # Meet in the Middle
         resultado = meet_in_the_middle(estado_inicial, estado_final, game_choice+1)
-        if resultado:
+        if resultado is not None:
             camino_inicio, camino_meta = resultado
             for nodo in camino_inicio + camino_meta[::-1]:  # Visualiza el camino completo
                 draw_board(nodo)
                 pygame.time.wait(500)  # Espera medio segundo entre cada estado
+        else:
+            print("Error: meet_in_the_middle function returned None")
+            running = False
     running = False
 
 pygame.quit()
