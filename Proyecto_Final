@@ -20,36 +20,25 @@ class Nodo:
         return self.costo_f < other.costo_f
         #verifica que el valor de costo_f del nodo actual sea menor que el costo_f de otro nodo 
     
-    #Metodo para mover las piezas del tablero para 8-puzzle 
     def mover(self, direccion):
         if self.juego == 1:  # 8-puzzle
-            estado = list(self.estado)#hace una lista de las tuplas para poder modificarlas
-            ind = estado.index(0)#nos da el inidice de el espacio vacio 
-            #si esta en la primera fila no puede moverse hacia arriba
-            if direccion == "arriba" and ind not in [0, 1, 2]:
-                #se mueve el inidce 3 posiciones hacia arriba (posicion 8-3= 5)
-                estado[ind - 3], estado[ind] = estado[ind], estado[ind - 3]
-                """
-                temp = estado[ind - 3]
-                estado[ind - 3] = estado[ind]
-                estado[ind] = temp
+            estado = list(self.estado)
+            if 0 in estado:
+                ind = estado.index(0)  # Índice del espacio vacío
+                if direccion == "arriba" and ind not in [0, 1, 2]:
+                    estado[ind - 3], estado[ind] = estado[ind], estado[ind - 3]
+                elif direccion == "abajo" and ind not in [6, 7, 8]:
+                    estado[ind + 3], estado[ind] = estado[ind], estado[ind + 3]
+                elif direccion == "derecha" and ind not in [2, 5, 8]:
+                    estado[ind + 1], estado[ind] = estado[ind], estado[ind + 1]
+                elif direccion == "izquierda" and ind not in [0, 3, 6]:
+                    estado[ind - 1], estado[ind] = estado[ind], estado[ind - 1]
+                else:
+                    return None
                 return tuple(estado)
-                """
-            #si esta en la ultima fila no se puede mover hacia abajo
-            elif direccion == "abajo" and ind not in [6, 7, 8]:
-                estado[ind + 3], estado[ind] = estado[ind], estado[ind + 3]
-            #si esta en la columna derecha  no se puede mover hacia la derecha
-            elif direccion == "derecha" and ind not in [2, 5, 8]:
-                estado[ind + 1], estado[ind] = estado[ind], estado[ind + 1]
-            #si esta en la columna izquierda no se puede mover hacia la izquierda 
-            elif direccion == "izquierda" and ind not in [0, 3, 6]:
-                estado[ind - 1], estado[ind] = estado[ind], estado[ind - 1]
             else:
                 return None
-            return tuple(estado)
-        if self.juego ==2: 
-            return None
-        #return None
+
 
     #metodo que encuentra y regresa todos los nodos sucesores del nodo actual 
     def encontrar_sucesores(self):
@@ -125,15 +114,22 @@ def calcular_heuristica(estado, juego):
                     h += 1#incrementa cada vez que hay una amenaza
         return h
     
+
 def calcular_heuristica_8queens(estado):
+    # Verifica si el estado está vacío
+    if not estado:
+        return 0
+
     # Contar pares de reinas que se atacan
     ataques = 0
-    for i in range(8):
-        for j in range(i + 1, 8):
+    for i in range(len(estado)):
+        for j in range(i + 1, len(estado)):
+            # Verifica si las reinas están en la misma columna o en la misma diagonal
             if abs(estado[i] - estado[j]) == abs(i - j) or estado[i] == estado[j]:
                 ataques += 1
 
     return ataques
+
 
 def encontrar_sucesores8quuens(self):
     """
@@ -153,6 +149,7 @@ def encontrar_sucesores8quuens(self):
                     sucesores.append(sucesor)  # Agregar el nuevo estado como sucesor
 
     return sucesores
+
 
 def es_estado_ataque8queens(estado):
     """
@@ -237,38 +234,53 @@ def meet_in_the_middle(inicial, meta, juego):
         
     return None
 
-def meet_in_the_middle_8Queens(inicial, meta):
-    # Diccionarios para estados visitados
-    visitados_inicial = {inicial: Nodo(inicial, None, None, 0, calcular_heuristica(inicial), 0)}
-    visitados_meta = {meta: Nodo(meta, None, None, 0, calcular_heuristica(meta), 0)}
+def generar_estado_inicial_8queens():
+    """Genera un estado inicial aleatorio válido para el problema de las 8 reinas"""
+    state = []
+    for _ in range(8):
+        state.append(random.randint(0, 7))  # Elige una fila aleatoria para cada reina en una columna
+    return tuple(state)
 
-    # Colas dobles para las fronteras
-    frontera_inicial = deque([(inicial, Nodo(inicial, None, None, 0, calcular_heuristica(inicial), 0))])
-    frontera_meta = deque([(meta, Nodo(meta, None, None, 0, calcular_heuristica(meta), 0))])
+estado_inicial_inicio = generar_estado_inicial_8queens()
+estado_inicial_fin = generar_estado_inicial_8queens()
 
-    while frontera_inicial and frontera_meta:
-        # Extraer nodos actuales
-        estado_actual_inicial, nodo_actual_inicial = frontera_inicial.popleft()
-        estado_actual_meta, nodo_actual_meta = frontera_meta.popleft()
+def meet_in_the_middle8Queens(estado_inicial, estado_final):
+    frontera_inicio = [Nodo(estado_inicial, None, None, 0, 0, calcular_heuristica_8queens(estado_inicial), 2)]  
+    frontera_fin = [Nodo(estado_final, None, None, 0, 0, calcular_heuristica_8queens(estado_final), 2)]  
+    explorados_inicio = set()
+    explorados_fin = set()
+    pasos = 0
 
-        # Comprobar si se encuentran en el medio
-        if estado_actual_inicial in visitados_meta:
-            return nodo_actual_inicial.encontrar_camino(), visitados_meta[estado_actual_inicial].encontrar_camino()
-        if estado_actual_meta in visitados_inicial:
-            return visitados_inicial[estado_actual_meta].encontrar_camino(), nodo_actual_meta.encontrar_camino()
+    while frontera_inicio and frontera_fin:
+        pasos += 1
+        
+        # Expandir frontera desde el inicio
+        nodo_inicio = frontera_inicio.pop(0)
+        explorados_inicio.add(nodo_inicio.estado)
+        sucesores_inicio = nodo_inicio.encontrar_sucesores()
+        
+        for sucesor in sucesores_inicio:
+            if sucesor.estado not in explorados_inicio:
+                frontera_inicio.append(sucesor)
+                if sucesor.estado in explorados_fin:
+                    # Encontramos un nodo común
+                    return (sucesor.encontrar_camino(), pasos)
+        
+        # Expandir frontera desde el fin
+        nodo_fin = frontera_fin.pop(0)
+        explorados_fin.add(nodo_fin.estado)
+        sucesores_fin = nodo_fin.encontrar_sucesores()
+        
+        for sucesor in sucesores_fin:
+            if sucesor.estado not in explorados_fin:
+                frontera_fin.append(sucesor)
+                if sucesor.estado in explorados_inicio:
+                    # Encontramos un nodo común
+                    return (sucesor.encontrar_camino(), pasos)
 
-        # Explorar sucesores
-        for sucesor in nodo_actual_inicial.encontrar_sucesores():
-            if sucesor.estado not in visitados_inicial:
-                visitados_inicial[sucesor.estado] = sucesor
-                frontera_inicial.append((sucesor.estado, sucesor))
+    return None  # No se encontró solución
 
-        for sucesor in nodo_actual_meta.encontrar_sucesores():
-            if sucesor.estado not in visitados_meta:
-                visitados_meta[sucesor.estado] = sucesor
-                frontera_meta.append((sucesor.estado, sucesor))
 
-    return None
 
 
 #----------------------------------------------
@@ -352,7 +364,8 @@ def generar_estado_inicial_random():
     random.shuffle(estado_random)
     return tuple(estado_random)
 
-# ... (other imports and the beginning of the class Nodo)
+
+
 
 # Definición de estados inicial y final
 estado_final = (1, 2, 3, 4, 5, 6, 7, 8, 0) if game_choice == 0 else (3,1,7,4,6,0,2,5)
@@ -419,10 +432,13 @@ while running:
             print("Error: a_star function returned None")
             running = False
     elif algorithm_choice == 1:  # Meet in the Middle
-        resultado = meet_in_the_middle(estado_inicial, estado_final, game_choice+1)
+        if game_choice == 0:  # 8-Puzzle
+            resultado = meet_in_the_middle(estado_inicial, estado_final, game_choice+1)
+        elif game_choice == 1:  # 8-Queens
+            resultado = meet_in_the_middle8Queens(estado_inicial, estado_final)
         if resultado is not None:
-            camino_inicio, camino_meta = resultado
-            for nodo in camino_inicio + camino_meta[::-1]:  # Visualiza el camino completo
+            camino_inicio, camino_fin = resultado
+            for nodo in camino_inicio + camino_fin[::-1]:  # Visualiza el camino completo
                 draw_board(nodo)
                 pygame.time.wait(500)  # Espera medio segundo entre cada estado
         else:
